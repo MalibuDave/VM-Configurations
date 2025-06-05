@@ -1,0 +1,83 @@
+
+Configure a Virtual Linux Server as a Router and Firewall
+
+Post Install
+
+Set host name for router 
+
+    sudo hostnamectl set-hostname <router name ex router.local> 
+
+Edit the hosts file
+
+sudo nano /etc/hosts 
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4 your-new-hostname
+
+
+Configure eth0 (this is the extenal nic card that will see the outside world)
+Use nmcli 
+
+List the interfaces 
+nmcli device (ensure that eth0 is up and connected externally - this is what you setup in Hyper-V)
+
+Configure the interface
+(connection-name will be the active nic card from nmcli device - usually eth0 unless you've renamed it)
+(the IP address assigned here is specifically for the external nic card)
+sudo nmcli con mod <connection-name> ipv4.addresses 192.168.2.1/24
+sudo nmcli con mod <connection-name> ipv4.gateway 192.168.2.254
+sudo nmcli con mod <connection-name> ipv4.method manual
+sudo nmcli con up <connection-name>
+
+Config Interal (usually eth1 this is the next nic card in the virual router)
+(connection-name will be the active nic card from nmcli device - usually eth1 unless you've renamed it)
+(the IP address assigned here is specifically for the internal nic card or network)
+(it is recommended that you use a different class A, B, or C for internal network)
+
+sudo nmcli con mod <connection-name> ipv4.addresses 10.1.1.1/24
+sudo nmcli con mod <connection-name> ipv4.gateway ""
+sudo nmcli con mod <connection-name> ipv4.method manual
+sudo nmcli con up <connection-name>
+
+Next we need to bind to zones
+
+sudo firewall-cmd --zone=internal --add-interface=eth1
+    (if the nic is bound to public you need to unbind it)
+        sudo firewall-cmd --zone=public --remove-interface=eth1
+(make sure to start from the beginning)
+sudo firewall-cmd --zone=internal --add-interface=eth1
+sudo firewall-cmd --permanent --zone=internal --add-interface=eth1
+sudo firewall-cmd --reload
+
+Now verify that all zones are active
+sudo firewall-cmd --get-active-zones
+    you should see something that resembles this:
+        external
+            interfaces: eth0
+        internal
+            interfaces: eth1
+
+Now we need to edit the sysctl.conf file
+
+sudo nano /etc/sysctl.conf
+    (add the following)
+    net.ipv4.ip_forward = 1
+    (savee and exit)
+
+update service
+sudo sysctl -p
+(you should get an output that looks like this)
+net.ipv4.ip_forward = 1
+(verify)
+cat /proc/sys/net/ipv4/ip_forward
+(output should be 1)
+1
+
+now add
+sudo firewall-cmd --permanent --zone=internal --set-target=ACCEPT
+sudo firewall-cmd --reload 
+
+Enable NAT Masquerading
+
+sudo firewall-cmd --zone=external --add-masquerade
+sudo firewall-cmd --permanent --zone=external --add-masquerade
+sudo firewall-cmd --reload
+
